@@ -1,0 +1,41 @@
+{
+  "name": "mralston/pdf",
+  "description": "Laravel wrapper for generating PDF files using headless Chrome/Chromium",
+  "keywords": [
+    "mralston",
+    "laravel",
+    "pdf"
+  ],
+  "homepage": "https://github.com/mralston/pdf",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Matt Ralston",
+      "email": "matt@mralston.co.uk",
+      "role": "Developer"
+    }
+  ],
+  "require": {
+    "php": "^7.4.15|^8.0",
+    "chrome-php/chrome": "^1.9",
+    "illuminate/http": "^7.0|^8.0|^9.0|^10.0",
+    "illuminate/support": "^7.0|^8.0|^9.0|^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Mralston\\Pdf\\": "src"
+    }
+  },
+  "config": {
+    "sort-packages": true
+  },
+  "extra": {
+    "laravel": {
+      "providers": [
+        "Mralston\\Pdf\\Providers\\PdfServiceProvider"
+      ]
+    }
+  },
+  "minimum-stability": "dev",
+  "prefer-stable": true
+}
