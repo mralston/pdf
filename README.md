@@ -90,6 +90,6 @@ class InvoiceController
 
 Please [e-mail security vulnerabilities directly to me](mailto:matt@mralston.co.uk).
 
-## License
+## Licence
 
-PDF is open-sourced software licensed under the [MIT license](LICENCE.md).
+PDF is open-sourced software licenced under the [MIT license](LICENSE.md).
