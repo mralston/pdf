@@ -241,7 +241,7 @@ class Pdf
             $this->render();
         }
 
-        $this->pdf->saveToFile($filename);
+        $this->pdf->saveToFile($filename, $this->timeout * 1000);
 
         $this->browser->close();
         $this->pdf = null;
