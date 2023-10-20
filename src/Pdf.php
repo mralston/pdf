@@ -47,6 +47,9 @@ class Pdf
     private const SOURCE_HTML = 3;
     private const SOURCE_VIEW = 4;
 
+    private $logger = null;
+    private $customFlags = [];
+
     public function __construct()
     {
         $this->setSecurityToken(config('pdf.security_token'));
@@ -74,6 +77,20 @@ class Pdf
     {
         return (new Pdf())
             ->loadView($view, $data);
+    }
+
+    public function withLogger($logger = null)
+    {
+        $this->logger = $logger ?? Log::getLogger();
+
+        return $this;
+    }
+
+    public function withFlags(array $flags = [])
+    {
+        $this->customFlags = $flags;
+
+        return $this;
     }
 
     public function loadFile(?string $file = null): self
@@ -205,6 +222,8 @@ class Pdf
             'noSandbox' => true,
             'ignoreCertificateErrors' => true,
             'headers' => $this->prepareRequestHeaders(),
+ 		    'debugLogger' => $this->logger,
+ 		    'customFlags' => $this->customFlags,
         ]);
 
         $page = $this->browser->createPage();
@@ -255,7 +274,7 @@ class Pdf
 
         $base64 = $this->pdf
             ->getResponseReader()
-            ->waitForResponse(5000)
+            ->waitForResponse($this->timeout * 1000)
             ->getResultData('data');
 
         $this->browser->close();
@@ -272,7 +291,7 @@ class Pdf
 
         $base64 = $this->pdf
             ->getResponseReader()
-            ->waitForResponse(5000)
+            ->waitForResponse($this->timeout * 1000)
             ->getResultData('data');
 
         $this->browser->close();
@@ -291,7 +310,7 @@ class Pdf
 
         $base64 = $this->pdf
             ->getResponseReader()
-            ->waitForResponse(5000)
+            ->waitForResponse($this->timeout * 1000)
             ->getResultData('data');
 
         $this->browser->close();
