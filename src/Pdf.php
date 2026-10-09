@@ -195,15 +195,23 @@ class Pdf
 
     private function renderHtml(?string $html = null): self
     {
-        $tmpFile = tempnam(sys_get_temp_dir(), Str::random()) . '.html';
+        // Chrome needs a file with an .html extension to render it as HTML. tempnam() creates the
+        // file it names, so that file is renamed rather than left behind beside a new one.
+        $tmpName = tempnam(sys_get_temp_dir(), Str::random());
+        $tmpFile = $tmpName . '.html';
+        rename($tmpName, $tmpFile);
 
-        file_put_contents($tmpFile, $html ?? $this->html);
+        try {
+            file_put_contents($tmpFile, $html ?? $this->html);
 
-        $result = $this->renderUrl('file://' . $tmpFile);
-
-        unset($tmpFile);
-
-        return $result;
+            // The page has loaded and the print request has been sent by the time this returns,
+            // so the file is no longer needed.
+            return $this->renderUrl('file://' . $tmpFile);
+        } finally {
+            if (file_exists($tmpFile)) {
+                unlink($tmpFile);
+            }
+        }
     }
 
     private function renderFile(): self
