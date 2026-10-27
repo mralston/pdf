@@ -9,6 +9,7 @@ use HeadlessChromium\PageUtils\AbstractBinaryInput;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Throwable;
 
 class Pdf
 {
@@ -53,6 +54,17 @@ class Pdf
     public function __construct()
     {
         $this->setSecurityToken(config('pdf.security_token'));
+    }
+
+    public function __destruct()
+    {
+        // A PDF that was rendered but never read still has a browser running. chrome-php only
+        // kills its browsers when PHP shuts down, which a long-running queue worker never does.
+        try {
+            $this->closeBrowser();
+        } catch (Throwable $e) {
+            // An exception must not escape a destructor.
+        }
     }
 
     public static function fromFile(?string $file = null): self
@@ -221,7 +233,7 @@ class Pdf
 
     private function renderUrl(?string $url = null): self
     {
-        $this->pdf = null;
+        $this->closeBrowser();
 
         $browserFactory = new BrowserFactory($this->chromeBinary ?? config('pdf.chrome_binary'));
 
@@ -234,17 +246,56 @@ class Pdf
  		    'customFlags' => $this->customFlags,
         ]);
 
-        $page = $this->browser->createPage();
+        try {
+            $page = $this->browser->createPage();
 
-        $page->navigate($url ?? $this->url)
-            ->waitForNavigation(Page::LOAD, $this->timeout * 1000);
+            $page->navigate($url ?? $this->url)
+                ->waitForNavigation(Page::LOAD, $this->timeout * 1000);
 
-        $this->pdf = $page->pdf(array_merge(
-            $this->options,
-            $this->emulatePhantomJs ? ['preferCSSPageSize' => true] : []
-        ));
+            $this->pdf = $page->pdf(array_merge(
+                $this->options,
+                $this->emulatePhantomJs ? ['preferCSSPageSize' => true] : []
+            ));
+        } catch (Throwable $e) {
+            $this->closeBrowser();
+
+            throw $e;
+        }
 
         return $this;
+    }
+
+    private function closeBrowser(): void
+    {
+        $this->pdf = null;
+
+        if ($this->browser === null) {
+            return;
+        }
+
+        // Cleared first so that a close which throws is not retried by the destructor.
+        $browser = $this->browser;
+        $this->browser = null;
+
+        $browser->close();
+    }
+
+    private function readPdf(): string
+    {
+        if (empty($this->pdf)) {
+            $this->render();
+        }
+
+        try {
+            $base64 = $this->pdf
+                ->getResponseReader()
+                ->waitForResponse($this->timeout * 1000)
+                ->getResultData('data');
+        } finally {
+            $this->closeBrowser();
+        }
+
+        return base64_decode($base64);
     }
 
     private function prepareRequestHeaders()
@@ -268,63 +319,28 @@ class Pdf
             $this->render();
         }
 
-        $this->pdf->saveToFile($filename, $this->timeout * 1000);
-
-        $this->browser->close();
-        $this->pdf = null;
+        try {
+            $this->pdf->saveToFile($filename, $this->timeout * 1000);
+        } finally {
+            $this->closeBrowser();
+        }
     }
 
     public function output(): string
     {
-        if (empty($this->pdf)) {
-            $this->render();
-        }
-
-        $base64 = $this->pdf
-            ->getResponseReader()
-            ->waitForResponse($this->timeout * 1000)
-            ->getResultData('data');
-
-        $this->browser->close();
-        $this->pdf = null;
-
-        return base64_decode($base64);
+        return $this->readPdf();
     }
 
     public function stream(): Response
     {
-        if (empty($this->pdf)) {
-            $this->render();
-        }
-
-        $base64 = $this->pdf
-            ->getResponseReader()
-            ->waitForResponse($this->timeout * 1000)
-            ->getResultData('data');
-
-        $this->browser->close();
-        $this->pdf = null;
-
-        return new Response(base64_decode($base64), 200, [
+        return new Response($this->readPdf(), 200, [
             'Content-Type' => 'application/pdf',
         ]);
     }
 
     public function download(?string $filename = 'document.pdf'): Response
     {
-        if (empty($this->pdf)) {
-            $this->render();
-        }
-
-        $base64 = $this->pdf
-            ->getResponseReader()
-            ->waitForResponse($this->timeout * 1000)
-            ->getResultData('data');
-
-        $this->browser->close();
-        $this->pdf = null;
-
-        return new Response(base64_decode($base64), 200, [
+        return new Response($this->readPdf(), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' =>  'attachment; filename="' . $filename . '"'
         ]);
